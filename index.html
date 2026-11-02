@@ -379,7 +379,7 @@ button:focus-visible,input:focus-visible{outline:4px solid var(--yellow);outline
 .mem .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mem .nm small{color:var(--mute);font-size:15px;margin-left:4px}
 .ph{font-size:15px;border-radius:999px;padding:2px 10px;background:#1d3d7a;white-space:nowrap;color:#cfe3ff}
-.ph.quiz{background:#2a7cf6;color:#fff}.ph.program{background:#ff9a2a;color:#2b1a00}.ph.ready{background:var(--ok);color:#fff}.ph.watch{background:#8b5cf6;color:#fff}.ph.roundend{background:var(--yellow);color:#2b1a00}.ph.end{background:#fff;color:var(--ink)}.ph.off{background:#7a2330;color:#fff}
+.ph.quiz{background:#2a7cf6;color:#fff}.ph.program{background:#ff9a2a;color:#2b1a00}.ph.ready{background:var(--ok);color:#fff}.ph.watch{background:#8b5cf6;color:#fff}.ph.roundend{background:var(--yellow);color:#2b1a00}.ph.end{background:#fff;color:var(--ink)}.ph.ai{background:#3b4a6b;color:#cfe3ff}.ph.off{background:#7a2330;color:#fff}
 .tblWrap{overflow-x:auto}
 table.rank{border-collapse:separate;border-spacing:0 6px;width:100%;min-width:600px}
 table.rank th{font-weight:400;color:var(--mute);text-align:left;padding:4px 12px;font-size:17px}
@@ -622,6 +622,14 @@ tr.top .medal{background:var(--yellow);color:#2b1a00}
   </div>
   <div class="tModeBar" id="tModeBar" hidden>체험 모드: 인터넷 서버에 연결되지 않아 이 브라우저 안에서만 연결돼요. 수업에서는 GitHub Pages에 올린 주소로 열어 주세요.</div>
 
+  <section id="tLock" class="pnl joinT" hidden>
+    <h2><span class="A A-s_lock"></span>교사 관제실 잠금</h2>
+    <p class="tMuted" style="font-size:19px;margin-top:0">교사 비밀번호를 넣어 주세요.</p>
+    <label class="fldT"><span>비밀번호</span><input class="inp" id="inPw" type="password" autocomplete="current-password" style="font-size:30px"></label>
+    <p class="tMsg" id="pwErr" aria-live="polite"></p>
+    <button class="gb blue" id="btnPw" type="button" style="width:100%;height:76px">들어가기</button>
+  </section>
+
   <section id="tStart" class="pnl joinT" hidden>
     <h2><span class="A A-s_team"></span>수업 준비</h2>
     <p class="tMuted" style="font-size:19px;margin-top:0">새 반을 만들면 4글자 반 코드가 생겨요. 학생은 반 코드와 이름으로 들어오고, 모둠은 자동으로 정해져요.</p>
@@ -656,7 +664,7 @@ tr.top .medal{background:var(--yellow);color:#2b1a00}
         <div class="fldT"><span>라운드마다 문제 수</span><div class="seg" id="tQuiz"></div></div>
         <div class="fldT"><span>최대 라운드</span><div class="seg" id="tRounds"></div></div>
         <div class="fldT"><span>라운드 사이</span><button class="toggle" id="tApprove" type="button" aria-pressed="false"><i></i>교사 승인 후 다음 라운드</button></div>
-        <p class="tMuted" style="font-size:17px;margin:0">모둠은 최대 4명이에요. 인원이 나누어떨어지지 않으면 3명 모둠을 섞어서 고르게 나누고, 바로 전 게임에서 같은 모둠이던 친구는 되도록 다시 만나지 않게 정해요.</p>
+        <p class="tMuted" style="font-size:17px;margin:0">모둠은 최대 4명이고 빈자리는 AI 로봇이 채워요. 이미 같은 모둠이던 친구는 되도록 다시 만나지 않게 정해요. 게임 중에 들어온 학생은 AI 자리를 넘겨받고, 먼저 끝난 학생은 8초 뒤 처음 만나는 친구들과 새 모둠으로 다시 시작해요. (이 교사 화면이 켜져 있어야 자동으로 돼요.)</p>
       </div>
       <div class="pnl">
         <h2><span class="A A-s_team"></span>모둠 준비 현황 <span class="gState" id="tState"></span></h2>
@@ -924,6 +932,26 @@ function dealHand(seed,round,idx,size){
   const deck=shuffle(d.map((t,i)=>({t,p:pr[i]})),r);
   return deck.slice(idx*9,idx*9+size);
 }
+const AI_NAME=['AI 파랑','AI 주황','AI 빨강','AI 초록'];
+function simCards(r,seq){let x=r.x,y=r.y,d=r.dir,dead=false;
+  for(const c of seq){const t=c.t;
+    if(t==='rr')d=(d+1)%4;else if(t==='rl')d=(d+3)%4;else if(t==='ut')d=(d+2)%4;
+    else{const n=t==='bk'?1:+t[1],md=t==='bk'?(d+2)%4:d;for(let k=0;k<n;k++){if(!canPass(x,y,md))break;x+=DX[md];y+=DY[md];const tl=tileAt(x,y);if(tl==='X'||tl==='P'){dead=true;break;}}}
+    if(dead)break;}
+  return {x,y,d,dead};}
+/* AI 로봇: 다음 깃발에 가까워지는 카드 5장을 고름 (모든 기기에서 똑같이 계산됨) */
+function aiProgram(st,i,hand){
+  const r=st.robots[i];if(!r||r.dead||hand.length<5)return hand.slice(0,5);
+  const f=FLAGPOS[Math.min(r.next,3)];
+  const score=seq=>{const q=simCards(r,seq);return q.dead?100:Math.abs(f.x-q.x)+Math.abs(f.y-q.y);};
+  const chosen=[],used=new Set();
+  for(let k=0;k<5;k++){let best=-1,bs=1e9;
+    hand.forEach((c,j)=>{if(used.has(j))return;const seq=chosen.concat([c]);let sc=score(seq);
+      if(k<4)hand.forEach((c2,j2)=>{if(j2===j||used.has(j2))return;sc=Math.min(sc,score(seq.concat([c2]))+.5);});
+      sc+=j*1e-3;if(sc<bs){bs=sc;best=j;}});
+    used.add(best);chosen.push(hand[best]);}
+  return chosen;
+}
 const NOOP={wait:async()=>{},render(){},log(){},zap(){},sfx(){},reg(){},reveal(){},status(){},fx(){},anim(){}};
 const rn=r=>`<b style="color:${COLORS[r.id]}">${esc(r.name)}</b>`;
 const robotAt=(st,x,y)=>st.robots.find(r=>!r.dead&&r.x===x&&r.y===y);
@@ -1132,7 +1160,7 @@ $('rdyBack').onclick=()=>leaveClass();
 function showWait(msg){
   if(GAME)return;
   $('waitTitle').textContent=`${ME.name}, 반 ${ME.code}에 들어왔어요!`;
-  $('waitText').textContent=msg||(META&&META.status==='playing'?'지금 친구들이 게임 중이에요. 다음 게임부터 모둠에 들어가요.':'선생님이 모둠을 자동으로 정할 때까지 기다려요.');
+  $('waitText').textContent=msg||(META&&META.status==='playing'?'친구들이 게임 중이에요. 곧 AI 자리나 새 모둠에 자동으로 들어가요.':'선생님이 모둠을 자동으로 정할 때까지 기다려요.');
   show('sWait');
 }
 function onStudents(){
@@ -1157,7 +1185,9 @@ function onMeta(){
     leaveGame();showWait('선생님이 게임을 끝냈어요. 다음 게임을 기다려요.');return;
   }
   if(GAME&&GAME.onMeta)GAME.onMeta();
-  if(!GAME&&META.status==='playing'&&me&&me.group&&me.group.gameId===META.gameId&&ssGet('rr_done')!==META.gameId){enterGame(META.gameId,me.group.gid,me.group.idx,META.config);return;}
+  const gkey=me&&me.group?me.group.gameId+':'+me.group.gid:null;
+  if(GAME&&GAME.finished&&gkey&&me.group.gameId===META.gameId&&gkey!==GAME.gameId+':'+GAME.gid){leaveGame();}
+  if(!GAME&&META.status==='playing'&&me&&me.group&&me.group.gameId===META.gameId&&ssGet('rr_done')!==gkey){enterGame(META.gameId,me.group.gid,me.group.idx,META.config);return;}
   if(!GAME&&META.status!=='playing'){
     const pg=META.pending?arr(META.pending.groups).map(arr):null;
     const gi=pg?pg.findIndex(g=>g.includes(ME.sid)):-1;
@@ -1176,7 +1206,7 @@ function renderReady(group,gi){
   let h='';
   for(let i=0;i<4;i++){
     const sid=group[i],s=sid&&STUDENTS[sid];
-    if(!sid){h+=`<div class="emptyCard" style="left:${CARDX[i][0]}px;top:236px;width:${CARDX[i][1]-CARDX[i][0]}px;height:530px">빈 자리</div>`;continue;}
+    if(!sid){h+=`<div class="emptyCard" style="left:${CARDX[i][0]}px;top:236px;width:${CARDX[i][1]-CARDX[i][0]}px;height:530px;flex-direction:column;gap:8px">AI 로봇<small style="font-size:22px">빈자리는 AI가 함께 달려요</small></div>`;continue;}
     h+=`<div class="txt c out" style="left:${PILLX[i][0]}px;top:240px;width:${PILLX[i][1]-PILLX[i][0]}px;height:52px;font-family:var(--disp);font-size:28px">${i+1}번 로봇</div>`;
     h+=`<div class="txt dark" style="left:${NAMEX[i][0]+16}px;top:636px;width:${NAMEX[i][1]-NAMEX[i][0]-60}px;height:46px;font-size:30px">${esc(s?s.name:'')}</div>`;
     const ok=s&&s.ready===key;
@@ -1197,11 +1227,12 @@ async function enterGame(gameId,gid,idx,cfg){
   const grp=await Store.get(cpath(ME.code,'groups',gameId,gid));
   if(GAME!==g)return;
   if(!grp||!arr(grp.names).length){GAME=null;setTimeout(onMeta,800);return;}
-  g.members=arr(grp.members);g.names=arr(grp.names);
-  g.seed=gameId+':'+gid;g.st=newState(g.names);
+  g.members=arr(grp.members).map(x=>x||'');g.names=arr(grp.names);g.take=grp.take||{};
+  g.seed=gameId+':'+gid;g.st=newState(g.names);refreshNames(g,1);
   const base=cpath(ME.code,'play',gameId,gid);g.base=base;
   const myStat=await Store.get(base+'/stats/'+idx);
   if(myStat){g.correct=myStat.correct||0;g.total=myStat.total||0;}
+  g.unsubs.push(Store.on(cpath(ME.code,'groups',gameId,gid,'take'),t=>{g.take=t||{};if(g.onProgs)g.onProgs();}));
   let r1,r2;const p1=new Promise(r=>r1=r),p2=new Promise(r=>r2=r);
   g.unsubs.push(Store.on(base+'/progs',p=>{g.progs=p||{};r1();if(g.onProgs)g.onProgs();}));
   g.unsubs.push(Store.on(base+'/stats',s=>{g.stats=s||{};r2();if(g.onStats)g.onStats();}));
@@ -1209,27 +1240,42 @@ async function enterGame(gameId,gid,idx,cfg){
   if(GAME!==g)return;
   updatePause();
   while(roundComplete(g,g.round)){
+    refreshNames(g,g.round);
     await runRound(g.st,resolveProgs(g,g.round),NOOP);
     if(isOver(g)){finishGame(g);return;}
     g.round++;
   }
   gameLoop(g,g.round>1);
 }
+function seatHuman(g,i,R){if(g.members[i])return true;const t=g.take&&g.take[i];return !!(t&&R>=t.from);}
+function seatSid(g,i){if(g.members[i])return g.members[i];const t=g.take&&g.take[i];return t?t.sid:'';}
+function seatName(g,i,R){if(g.members[i])return g.names[i];const t=g.take&&g.take[i];return t&&R>=t.from?t.name:AI_NAME[i];}
+function seatOffline(g,i){const sid=seatSid(g,i);return !!sid&&(!STUDENTS||!STUDENTS[sid]||STUDENTS[sid].online===false);}
+function refreshNames(g,R){g.st.robots.forEach((r,i)=>{r.name=seatName(g,i,R);r.ai=!seatHuman(g,i,R);});}
+function humansAt(g,R){return g.names.map((_,i)=>i).filter(i=>seatHuman(g,i,R));}
 const roundProgs=(g,R)=>{const p=g.progs[R];return p?(Array.isArray(p)?Object.fromEntries(p.map((v,i)=>[i,v]).filter(e=>e[1])):p):{};};
-function roundComplete(g,R){const p=roundProgs(g,R);return g.names.every((_,i)=>p[i]);}
+function roundComplete(g,R){const p=roundProgs(g,R);return g.names.every((_,i)=>!seatHuman(g,i,R)||p[i]);}
 function resolveProgs(g,R){
   const p=roundProgs(g,R);
-  return g.names.map((_,i)=>{const e=p[i];if(e&&!e.auto&&e.cards)return arr(e.cards);
-    const r=g.st.robots[i];return dealHand(g.seed,R,i,handSize(0,r.dmg)).slice(0,5);});
+  return g.names.map((_,i)=>{const r=g.st.robots[i];
+    if(seatHuman(g,i,R)){const e=p[i];if(e&&!e.auto&&e.cards)return arr(e.cards);return aiProgram(g.st,i,dealHand(g.seed,R,i,handSize(0,r.dmg)));}
+    return aiProgram(g.st,i,dealHand(g.seed,R,i,handSize(1,r.dmg)));});
 }
 const isOver=g=>g.st.winner!=null||(g.cfg.maxRounds&&g.round>=g.cfg.maxRounds);
 function writeStat(g,phase,round){
   const r=g.st.robots[g.idx];
   Store.set(g.base+'/stats/'+g.idx,{name:ME.name,phase,round:round||g.round,x:r.x,y:r.y,dir:r.dir,dead:!!r.dead,dmg:r.dmg,flags:Math.min(r.next-1,3),correct:g.correct,total:g.total,t:Date.now()});
 }
+/* AI 자리와 접속이 끊긴 친구 자리의 상태를 대신 기록 (교사 화면용) */
+function writeProxy(g,phase,R){
+  g.st.robots.forEach((r,i)=>{if(i===g.idx)return;
+    const ai=!seatHuman(g,i,R);if(!ai&&!seatOffline(g,i))return;
+    const old=g.stats[i]||g.stats[String(i)]||{};
+    Store.set(g.base+'/stats/'+i,{name:r.name,ai,phase,round:R,x:r.x,y:r.y,dir:r.dir,dead:!!r.dead,dmg:r.dmg,flags:Math.min(r.next-1,3),correct:old.correct||0,total:old.total||0,t:Date.now()});});
+}
 const approvedFor=g=>{const a=META&&META.approve&&META.approve[g.gameId];return a?(a[g.gid]||0):0;};
 async function roundBreak(g,R){
-  writeStat(g,'roundend',R);
+  writeStat(g,'roundend',R);writeProxy(g,'roundend',R);
   renderRound(g,R);show('sRound');
   if(g.cfg.approve){
     await new Promise(res=>{const chk=()=>{if(GAME!==g||approvedFor(g)>=R){g.onMeta=null;res();}};g.onMeta=chk;chk();});
@@ -1240,11 +1286,14 @@ async function roundBreak(g,R){
 async function gameLoop(g,resumeBreak){
   if(resumeBreak&&g.cfg.approve&&approvedFor(g)<g.round-1){await roundBreak(g,g.round-1);if(GAME!==g)return;}
   while(GAME===g){
-    const R=g.round;
-    if(!roundProgs(g,R)[g.idx]){await myTurn(g,R);if(GAME!==g)return;}
-    writeStat(g,'ready');
+    const R=g.round;refreshNames(g,R);
+    const mine=seatHuman(g,g.idx,R);
+    if(mine&&!roundProgs(g,R)[g.idx]){await myTurn(g,R);if(GAME!==g)return;}
+    refreshNames(g,R);
+    writeStat(g,mine?'ready':'watch');
     startRunScreen(g,R);
-    const upd=()=>{const p=roundProgs(g,R),done=g.names.filter((_,i)=>p[i]).length;$('runWait').innerHTML=`모둠 친구들이 카드를 고르는 중이에요<br><b style="font-family:var(--disp);font-size:44px;color:#1f5fd9">${done} / ${g.names.length}</b>`;};
+    const upd=()=>{const p=roundProgs(g,R),hs=humansAt(g,R),done=hs.filter(i=>p[i]).length;
+      $('runWait').innerHTML=(mine?'':`다음 라운드부터 내가 로봇을 조종해요!<br>`)+`친구들이 카드를 고르는 중이에요 <b style="font-family:var(--disp);font-size:40px;color:#1f5fd9">${done} / ${hs.length}</b>`+(hs.length<g.names.length?`<br><small style="font-size:22px;color:#4a6797">AI 로봇 ${g.names.length-hs.length}대가 함께 달려요</small>`:'');};
     $('runWait').hidden=false;upd();
     await new Promise(res=>{g.onProgs=()=>{upd();if(roundComplete(g,R)){g.onProgs=null;res();}};g.onProgs();});
     if(GAME!==g)return;
@@ -1253,7 +1302,7 @@ async function gameLoop(g,resumeBreak){
     await sleep(500);
     await runRound(g.st,resolveProgs(g,R),animHooks(g),()=>GAME===g);
     if(GAME!==g)return;
-    renderRunStatus(g);
+    renderRunStatus(g);writeProxy(g,'watch',R);
     if(isOver(g)){await sleep(1000);finishGame(g);return;}
     await sleep(900);
     await roundBreak(g,R);if(GAME!==g)return;
@@ -1451,12 +1500,12 @@ function renderRound(g,R){
 function saveRecord(g,complete){
   if(g.saved)return;g.saved=true;
   const r=g.st.robots[g.idx],rk=ranking(g.st);
-  Store.set(cpath(ME.code,'students',ME.sid,'games',g.gameId),{unit:String(g.cfg.unit),flags:Math.min(r.next-1,3),correct:g.correct,total:g.total,
+  Store.set(cpath(ME.code,'students',ME.sid,'games',g.gameId+'_'+g.gid),{unit:String(g.cfg.unit),flags:Math.min(r.next-1,3),correct:g.correct,total:g.total,
     win:g.st.winner===g.idx,rank:complete?rk.findIndex(x=>x.id===g.idx)+1:null,size:g.names.length,complete:!!complete,at:Date.now()});
 }
 const FNY=[[345,432],[445,530],[545,632],[645,732]];
 function finishGame(g){
-  saveRecord(g,true);writeStat(g,'end');ssSet('rr_done',g.gameId);
+  saveRecord(g,true);writeStat(g,'end');writeProxy(g,'end',g.round);ssSet('rr_done',g.gameId+':'+g.gid);g.finished=true;
   const rk=ranking(g.st),w=rk[0];
   $('sFinal').className='scr A A-'+(w.id?'scr_final'+w.id:'scr_final');
   $('fnGroup').textContent=g.gid.slice(1)+'모둠';
@@ -1465,24 +1514,36 @@ function finishGame(g){
     for(let i=0;i<4;i++){const [y0,y1]=FNY[i],r=rk[i];
       if(!r){h+=`<div class="cover" style="left:868px;top:${y0}px;width:748px;height:${y1-y0}px">빈 자리</div>`;continue;}
       const s=g.stats[r.id]||{},c=r.id===g.idx?g.correct:(s.correct||0),t=r.id===g.idx?g.total:(s.total||0),fl=Math.min(r.next-1,3);
-      const pts=c+fl*2+(g.st.winner===r.id?5:0),mid=(y0+y1)/2;
+      const pts=c+fl*2+(g.st.winner===r.id?5:0),mid=(y0+y1)/2,isAI=!seatHuman(g,r.id,g.round);
       h+=`<div class="rkNum" style="left:885px;top:${mid-36}px;width:72px;height:72px">${i+1}</div>`;
       h+=`<div class="prof A-prof${r.id}_${i===0?1:0}" style="left:972px;top:${mid-42}px;width:90px;height:84px;background-color:${i===0?'#fbe39a':'#e7eef8'};border-radius:50%"></div>`;
       h+=`<div class="txt dark" style="left:1080px;top:${y0}px;width:108px;height:${y1-y0}px;font-size:${r.name.length>4?24:29}px;${r.id===g.idx?'font-family:var(--disp);color:#1f5fd9':''}">${esc(r.name)}</div>`;
       h+=`<div class="txt dark" style="left:1290px;top:${y0}px;width:130px;height:${y1-y0}px;font-family:var(--en);font-weight:900;font-size:32px">${fl} / 3</div>`;
-      h+=`<div class="txt c dark" style="left:1424px;top:${y0}px;width:190px;height:${y1-y0}px;flex-direction:column;line-height:1.1"><b style="font-family:var(--disp);font-weight:400;font-size:34px;color:#1f5fd9">+${pts}점</b><small style="font-size:18px;color:#4a6797">정답 ${c}/${t}</small></div>`;
+      h+=`<div class="txt c dark" style="left:1424px;top:${y0}px;width:190px;height:${y1-y0}px;flex-direction:column;line-height:1.1">${isAI?'<b style="font-family:var(--disp);font-weight:400;font-size:28px;color:#7f93b5">AI 로봇</b>':`<b style="font-family:var(--disp);font-weight:400;font-size:34px;color:#1f5fd9">+${pts}점</b><small style="font-size:18px;color:#4a6797">정답 ${c}/${t}</small>`}</div>`;
     }
     $('fnRows').innerHTML=h;};
   g.onStats=render;render();g.onProgs=null;
   show('sFinal');SFX.flag();
 }
-$('fnLobby').onclick=()=>{leaveGame();showWait();};
+$('fnLobby').onclick=()=>{leaveGame();showWait('다음 모둠이 정해지면 자동으로 시작해요. 이번에는 다른 친구들과 만나요!');};
 $('fnHome').onclick=()=>{leaveGame();show('sTitle');};
 
 /* ============================================================ 교사 */
-const T={code:null,data:null,tab:'setup',unit:10,quizN:3,maxRounds:8,approve:false,unsub:null,boards:{}};
-function teacherBoot(){const c=lsGet('rr_teacher_code');if(c)$('inTCode').value=c;tShow('tStart');}
-function tShow(id){$('tStart').hidden=id!=='tStart';$('tDash').hidden=id!=='tDash';}
+const T={code:null,data:null,tab:'setup',unit:10,quizN:3,maxRounds:8,approve:false,unsub:null,boards:{},cid:uid(),freeSince:{},coordTimer:0,busy:false};
+const PW_SHA='0dbbed0d5f19d328ef04d79ff94b7038b900785f7ec3f7f9855d1423e8fb8cb8',PW_H=3715537212;
+async function pwOk(pw){
+  try{if(window.crypto&&crypto.subtle){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(pw));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')===PW_SHA;}}catch(e){}
+  return hashStr('robotrally|'+pw)===PW_H;
+}
+function teacherBoot(){
+  if(ssGet('rr_tok')!==PW_SHA){tShow('tLock');setTimeout(()=>$('inPw').focus(),50);return;}
+  const c=lsGet('rr_teacher_code');if(c)$('inTCode').value=c;tShow('tStart');
+}
+$('btnPw').onclick=async()=>{const ok=await pwOk($('inPw').value);
+  if(!ok){$('pwErr').textContent='비밀번호가 맞지 않아요.';$('inPw').select();return;}
+  $('pwErr').textContent='';$('inPw').value='';ssSet('rr_tok',PW_SHA);teacherBoot();};
+$('inPw').onkeydown=e=>{if(e.key==='Enter')$('btnPw').click();};
+function tShow(id){$('tLock').hidden=id!=='tLock';$('tStart').hidden=id!=='tStart';$('tDash').hidden=id!=='tDash';if(id!=='tDash'&&T.coordTimer){clearInterval(T.coordTimer);T.coordTimer=0;}}
 $('tToStudent').onclick=()=>{location.hash='';};
 $('btnNewClass').onclick=async()=>{
   $('tErr').textContent='반을 만드는 중…';
@@ -1505,7 +1566,7 @@ function openClass(code){
   T.unsub=Store.on(cpath(code),d=>{T.data=d;if(!d){tShow('tStart');return;}
     if(first){first=false;const dr=(d.meta&&d.meta.draft)||{};T.unit=dr.unit??10;T.quizN=dr.quizN||3;T.maxRounds=dr.maxRounds??8;T.approve=!!dr.approve;buildTSettings();}
     scheduleT();});
-  tShow('tDash');setTab('setup');
+  tShow('tDash');setTab('setup');startCoord();
 }
 $('btnCopy').onclick=async()=>{try{await navigator.clipboard.writeText($('tLink').textContent);$('tCopied').textContent='복사했어요.';}catch(e){const r=document.createRange();r.selectNodeContents($('tLink'));const s=getSelection();s.removeAllRanges();s.addRange(r);$('tCopied').textContent='주소를 선택했어요. 복사해 주세요.';}};
 let tRaf=0;function scheduleT(){if(tRaf)return;tRaf=requestAnimationFrame(()=>{tRaf=0;renderT();});}
@@ -1529,13 +1590,17 @@ $$('.tab').forEach(b=>b.onclick=()=>setTab(b.dataset.tab));
 function setTab(t){T.tab=t;$$('.tab').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.tab===t)));
   $('tabSetup').hidden=t!=='setup';$('tabLive').hidden=t!=='live';$('tabRank').hidden=t!=='rank';$('tabManage').hidden=t!=='manage';renderT();}
 function groupStatus(meta,play,gs,gid){
-  const names=arr(gs[gid].names),stats=((play[gid]||{}).stats)||{};
-  const sa=names.map((_,i)=>stats[i]||stats[String(i)]);
+  const G=gs[gid],members=arr(G.members).map(x=>x||''),take=G.take||{},stats=((play[gid]||{}).stats)||{};
+  const sa=arr(G.names).map((_,i)=>stats[i]||stats[String(i)]);
+  const names=arr(G.names).map((n,i)=>members[i]?n:(take[i]?take[i].name:AI_NAME[i]));
+  const sids=members.map((m,i)=>m||(take[i]?take[i].sid:''));
+  const progs=((play[gid]||{}).progs)||{};
   const round=Math.max(1,...sa.filter(Boolean).map(s=>s.round||1));
   const ended=sa.length&&sa.every(s=>s&&s.phase==='end');
   const appr=((meta.approve||{})[meta.gameId]||{})[gid]||0;
   const waiting=!ended&&meta.config.approve&&sa.length&&sa.every(s=>s&&s.phase==='roundend'&&s.round===round)&&appr<round;
-  return {names,sa,round,ended,waiting};
+  const endAt=ended?Math.max(...sa.map(s=>s.t||0)):0;
+  return {names,sa,round,ended,waiting,members,take,sids,progs,endAt};
 }
 function renderT(){
   const d=T.data;if(!d||!d.meta)return;
@@ -1548,7 +1613,7 @@ function renderT(){
   $('btnAssign').disabled=playing;$('btnStartGame').disabled=playing||!meta.pending;
   $('btnPause').textContent=meta.paused?'▶ 계속하기':'Ⅱ 전체 일시정지';$('btnPause').className='gb '+(meta.paused?'blue':'silver');
   $('btnPause').disabled=!playing;$('btnStopGame').disabled=!playing;
-  const grpOf={};if(playing){const gs=(d.groups||{})[meta.gameId]||{};Object.entries(gs).forEach(([gid,g])=>arr(g.members).forEach(s=>grpOf[s]=gid));}
+  const grpOf={};if(playing){const gs=(d.groups||{})[meta.gameId]||{};Object.entries(gs).forEach(([gid,g])=>{arr(g.members).forEach(s=>{if(s)grpOf[s]=gid;});Object.values(g.take||{}).forEach(t=>grpOf[t.sid]=gid);});}
   $('tStudents').innerHTML=ids.length?ids.map(s=>`<span class="chipS"><i class="${studs[s].online===false?'off':''}"></i>${esc(studs[s].name)}${grpOf[s]?` <span class="tMuted">${grpOf[s].slice(1)}모둠</span>`:''}<button type="button" data-kick="${s}" aria-label="${esc(studs[s].name)} 내보내기">×</button></span>`).join(''):'<span class="tMuted" style="font-size:19px">아직 들어온 학생이 없어요. 학생 입장 주소와 반 코드를 알려 주세요.</span>';
   $$('#tStudents [data-kick]').forEach(b=>b.onclick=()=>Store.remove(cpath(T.code,'students',b.dataset.kick)));
   const pend=meta.pending?arr(meta.pending.groups).map(arr):null;
@@ -1562,15 +1627,18 @@ function renderT(){
   if(T.tab==='live')renderLive(d);
   if(T.tab==='rank')renderRank(studs);
 }
+/* 이미 같은 모둠이었던 횟수 (바로 전 모둠은 더 크게 셈) */
+function metCount(studs,a,b){const s=studs[a]||{};const m=(s.met&&s.met[b])||0;const last=arr(s.lastTeam).includes(b)?5:0;return m*3+last;}
+function groupCost(gr,studs){let c=0;for(let i=0;i<gr.length;i++)for(let j=i+1;j<gr.length;j++)c+=metCount(studs,gr[i],gr[j]);return c;}
+function metUpdates(up,gr,studs,extra){gr.forEach(a=>gr.forEach(b=>{if(a===b)return;const k=`students/${a}/met/${b}`;const base=extra&&extra[k]!=null?extra[k]:((studs[a]&&studs[a].met&&studs[a].met[b])||0);up[k]=base+1;if(extra)extra[k]=base+1;}));}
 function makeGroups(sids,studs){
   const n=sids.length;if(!n)return [];
   const g=Math.ceil(n/4),base=Math.floor(n/g),extra=n%g;
   const sizes=Array.from({length:g},(_,i)=>base+(i<extra?1:0));
-  const prev=s=>new Set(arr(studs[s]&&studs[s].lastTeam));
   let best=null,bestCost=1e9;
-  for(let t=0;t<400&&bestCost>0;t++){
+  for(let t=0;t<800&&bestCost>0;t++){
     const sh=shuffle([...sids]);const groups=[];let k=0;sizes.forEach(z=>{groups.push(sh.slice(k,k+z));k+=z;});
-    let cost=0;groups.forEach(gr=>{for(let i=0;i<gr.length;i++)for(let j=i+1;j<gr.length;j++)if(prev(gr[i]).has(gr[j]))cost++;});
+    const cost=groups.reduce((a,gr)=>a+groupCost(gr,studs),0);
     if(cost<bestCost){bestCost=cost;best=groups;}
   }
   return best;
@@ -1589,11 +1657,12 @@ $('btnStartGame').onclick=async()=>{
   if(!pend.length)return;
   const gameId='G'+Date.now().toString(36);const up={};
   pend.forEach((g,i)=>{const gid='g'+(i+1);
-    up[`groups/${gameId}/${gid}`]={members:g,names:g.map(s=>studs[s].name)};
+    up[`groups/${gameId}/${gid}`]={members:[0,1,2,3].map(k=>g[k]||''),names:[0,1,2,3].map(k=>g[k]?studs[g[k]].name:AI_NAME[k]),created:Date.now()};
+    metUpdates(up,g,studs);
     g.forEach((s,k)=>{up[`students/${s}/group`]={gameId,gid,idx:k};up[`students/${s}/lastTeam`]=g.filter(x=>x!==s);up[`students/${s}/ready`]=null;});});
   up['meta/status']='playing';up['meta/gameId']=gameId;up['meta/config']={unit:T.unit,quizN:T.quizN,maxRounds:T.maxRounds,approve:T.approve};up['meta/pending']=null;up['meta/paused']=false;up['meta/startedAt']=Date.now();
   try{await Store.update(cpath(T.code),up);}catch(e){$('tMsg').textContent=dbErr(e);return;}
-  $('btnAssign').textContent='모둠 자동 배정';setTab('live');
+  T.freeSince={};$('btnAssign').textContent='모둠 자동 배정';setTab('live');
 };
 $('btnPause').onclick=()=>{const p=!!(T.data&&T.data.meta&&T.data.meta.paused);Store.update(cpath(T.code,'meta'),{paused:!p});};
 function confirmT(text,yes){
@@ -1622,7 +1691,7 @@ function renderLive(d){
     gids.forEach(gid=>{const c=document.createElement('div');c.className='gcard';c.id='gc_'+gid;
       c.innerHTML=`<h3><span class="gNo">${gid.slice(1)}모둠</span><span class="tMuted rd" style="font-family:var(--ui);font-size:18px"></span><span class="gState st"></span></h3><div class="mini"><div class="bd" style="position:absolute;inset:0"></div></div><div class="mems"></div><div class="tRow"><button class="gb silver sm auto" type="button" style="height:48px">자동 진행</button><button class="gb orange sm appr" type="button" style="height:48px" hidden>승인</button></div>`;
       el.appendChild(c);
-      const names=arr(gs[gid].names);T.boards[gid]=newState(names).robots;
+      const names=arr(gs[gid].names);T.boards[gid]=newState(names).robots;T.boards[gid].forEach((r,i)=>r.name=st[gids.indexOf(gid)].names[i]);
       buildBoard(c.querySelector('.bd'),T.boards[gid],-1);
       c.querySelector('.auto').onclick=()=>autoAdvance(meta.gameId,gid,names.length);
       c.querySelector('.appr').onclick=()=>{const s=groupStatus(T.data.meta,((T.data.play||{})[meta.gameId])||{},gs,gid);Store.update(cpath(T.code,'meta'),{[`approve/${meta.gameId}/${gid}`]:s.round});};});}
@@ -1637,11 +1706,77 @@ function renderLive(d){
     const rob=T.boards[gid],init=newState(s.names).robots;
     s.sa.forEach((x,i)=>{if(x)Object.assign(rob[i],{x:x.x,y:x.y,dir:x.dir||0,dead:x.dead});else Object.assign(rob[i],{x:init[i].x,y:init[i].y,dir:0,dead:false});});
     placeRobots(c.querySelector('.bd'),rob);
-    const mem=arr(gs[gid].members);
-    c.querySelector('.mems').innerHTML=s.names.map((n,i)=>{const x=s.sa[i],on=studs[mem[i]]&&studs[mem[i]].online!==false;
-      const ph=!x?'':x.phase;const label=!x?'아직 안 들어옴':(PH[x.phase]||x.phase)+(on?'':' · 끊김');
+    c.querySelector('.mems').innerHTML=s.names.map((n,i)=>{const x=s.sa[i],sid=s.sids[i],ai=!sid,on=ai||(studs[sid]&&studs[sid].online!==false);
+      const tk=!s.members[i]&&s.take[i];
+      const ph=ai?'ai':!x?'':x.phase;const label=ai?'AI가 달리는 중':tk&&x&&x.ai?`${tk.from}라운드부터 참여`:!x?'들어오는 중':(PH[x.phase]||x.phase)+(on?'':' · AI가 대신');
       return `<div class="mem"><span class="A A-prof${i}_${x&&x.dmg>=2?2:0}"></span><span class="nm">${esc(n)}<small>깃발 ${x?x.flags:0}/3 · 정답 ${x?x.correct:0}/${x?x.total:0}</small></span><span class="ph ${on?ph:'off'}">${label}</span></div>`;}).join('');
   });
+}
+function curRound(s){return Math.max(1,...s.sa.filter(Boolean).map(x=>x.round||1));}
+function startCoord(){if(T.coordTimer)clearInterval(T.coordTimer);T.coordTimer=setInterval(()=>{coordinate().catch(e=>console.warn('coord',e));},3000);}
+async function coordinate(){
+  const d=T.data;if(T.busy||!d||!d.meta||d.meta.status!=='playing'||!T.code)return;
+  const meta=d.meta,now=Date.now();
+  if(d.coord&&d.coord.id!==T.cid&&now-d.coord.t<10000)return; // 다른 교사 창이 담당 중
+  T.busy=true;
+  try{
+    const gameId=meta.gameId,cfg=meta.config||{},studs=d.students||{},gs=(d.groups||{})[gameId]||{},play=((d.play||{})[gameId])||{};
+    const up={'coord':{id:T.cid,t:now}},metTmp={};
+    const gids=Object.keys(gs).sort((a,b)=>+a.slice(1)-+b.slice(1));
+    const info={};gids.forEach(gid=>info[gid]=groupStatus(meta,play,gs,gid));
+    const online=s=>studs[s]&&studs[s].online!==false;
+    const busy=new Set();
+    // 1) 접속이 끊긴 학생은 이번 라운드 카드를 AI가 대신 고름
+    gids.forEach(gid=>{const s=info[gid];if(s.ended)return;const R=curRound(s),pr=s.progs[R]||{};
+      s.sids.forEach((sid,i)=>{if(!sid)return;
+        const human=s.members[i]?true:(s.take[i]&&R>=s.take[i].from);
+        if(human&&!online(sid)&&!(pr[i]||pr[String(i)]))up[`play/${gameId}/${gid}/progs/${R}/${i}`]={auto:true};
+        if(online(sid))busy.add(sid);});});
+    // 2) 기다리는 학생 찾기 (새로 들어온 학생, 게임이 끝난 학생)
+    const free=[];
+    Object.keys(studs).forEach(sid=>{if(!online(sid))return;const gp=studs[sid].group;
+      let isFree=!gp||gp.gameId!==gameId;
+      if(!isFree){const s=info[gp.gid];if(!s)isFree=true;else if(s.ended&&now-s.endAt>8000&&s.sids[gp.idx]===sid)isFree=true;else if(s.sids[gp.idx]!==sid)isFree=true;}
+      if(isFree&&busy.has(sid)&&!(gp&&info[gp.gid]&&info[gp.gid].ended))isFree=false;
+      if(isFree){T.freeSince[sid]=T.freeSince[sid]||now;free.push(sid);}else delete T.freeSince[sid];});
+    free.sort((a,b)=>T.freeSince[a]-T.freeSince[b]);
+    const placed=new Set();
+    // 3) 진행 중인 모둠의 AI 자리에 들어가기 (만난 적 없는 친구들 모둠 우선)
+    free.forEach(sid=>{
+      let best=null;
+      gids.forEach(gid=>{const s=info[gid];if(s.ended)return;const R=curRound(s);
+        if(cfg.maxRounds&&cfg.maxRounds-R<2)return;
+        const seat=s.members.findIndex((m,i)=>!m&&!s.take[i]);if(seat<0)return;
+        const mates=s.sids.filter(Boolean);
+        const cost=mates.reduce((a,m)=>a+metCount(studs,sid,m),0);
+        if(cost>0)return;
+        const sc=mates.length*10+R;if(!best||sc<best.sc)best={gid,seat,R,sc,mates};});
+      if(!best)return;
+      const s=info[best.gid],pr=s.progs[best.R]||{};
+      const allIn=s.sids.every((x,i)=>{if(!x)return true;const h=s.members[i]?true:(s.take[i]&&best.R>=s.take[i].from);return !h||pr[i]||pr[String(i)];});
+      const from=allIn?best.R+1:best.R;
+      const tk={sid,name:studs[sid].name,from,at:now};
+      up[`groups/${gameId}/${best.gid}/take/${best.seat}`]=tk;s.take[best.seat]=tk;s.sids[best.seat]=sid;
+      up[`students/${sid}/group`]={gameId,gid:best.gid,idx:best.seat};
+      metUpdates(up,best.mates.concat([sid]),studs,metTmp);
+      placed.add(sid);delete T.freeSince[sid];});
+    // 4) 남은 학생은 8초 모았다가 만난 적 없는 친구끼리 새 모둠 (빈자리는 AI)
+    const rest=free.filter(s=>!placed.has(s)&&now-T.freeSince[s]>=8000);
+    if(rest.length){
+      // 여러 순서로 묶어 보고, 만난 적 없는 친구끼리 혼자인 모둠이 가장 적은 방법을 고름
+      let ng=null,bestSc=1e9;
+      for(let t=0;t<300;t++){const order=t?shuffle([...rest]):[...rest],tr=[];
+        order.forEach(sid=>{const cand=tr.filter(gr=>gr.length<4&&gr.every(m=>metCount(studs,sid,m)===0)).sort((x,y)=>x.length-y.length);if(cand.length)cand[0].push(sid);else tr.push([sid]);});
+        const sc=tr.length*10+tr.filter(gr=>gr.length===1).length*5+Math.max(...tr.map(gr=>gr.length))-Math.min(...tr.map(gr=>gr.length));
+        if(sc<bestSc){bestSc=sc;ng=tr;}}
+      let n=gids.reduce((a,g)=>Math.max(a,+g.slice(1)),0);
+      ng.forEach(gr=>{const gid='g'+(++n);
+        up[`groups/${gameId}/${gid}`]={members:[0,1,2,3].map(k=>gr[k]||''),names:[0,1,2,3].map(k=>gr[k]?studs[gr[k]].name:AI_NAME[k]),created:now,auto:true};
+        metUpdates(up,gr,studs,metTmp);
+        gr.forEach((sid,k)=>{up[`students/${sid}/group`]={gameId,gid,idx:k};up[`students/${sid}/lastTeam`]=gr.filter(x=>x!==sid);delete T.freeSince[sid];});});
+    }
+    await Store.update(cpath(T.code),up);
+  }finally{T.busy=false;}
 }
 async function autoAdvance(gameId,gid,n){
   const base=cpath(T.code,'play',gameId,gid);
